@@ -1,0 +1,25 @@
+services:
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.1.0
+    command: start-dev --import-realm
+    environment:
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin
+    ports:
+      - "9093:8080"
+    volumes:
+      - keycloak_data:/opt/keycloak/data
+      # Mounted read-only; --import-realm imports this on first boot if realm absent.
+      # Delete the named volume and restart to re-import after changes.
+      - ./keycloak/demo-realm.json:/opt/keycloak/data/import/demo-realm.json:ro
+    healthcheck:
+      # /health/ready is Keycloak's own readiness probe — it returns 200 only
+      # after the server has fully booted and the database migrations are done.
+      test: ["CMD-SHELL", "curl -f http://localhost:8080/health/ready || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s  # Keycloak is slow to start; give it a head start
+
+volumes:
+  keycloak_data:  # Named volume keeps realm config across container restarts

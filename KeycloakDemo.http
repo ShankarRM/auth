@@ -1,0 +1,61 @@
+### Shared base URL — change once if port differs
+@base = http://localhost:5050
+
+### Paste a token here after running get-token.sh
+@token = REPLACE_WITH_ACCESS_TOKEN
+
+
+# ── 1. Health check ───────────────────────────────────────────────────────────
+# No Authorization header required. Load balancers call this endpoint.
+#
+# Expected response:
+#   HTTP/1.1 200 OK
+#   Content-Type: text/plain; charset=utf-8
+#
+#   OK
+
+GET {{base}}/health
+
+###
+
+# ── 2. Get current user identity ──────────────────────────────────────────────
+# Reads sub, preferred_username, and email directly from validated JWT claims.
+#
+# Expected response (valid token):
+#   HTTP/1.1 200 OK
+#   Content-Type: application/json
+#
+#   {
+#     "sub": "a1b2c3d4-...",
+#     "username": "testuser",
+#     "email": "testuser@example.com"
+#   }
+#
+# Expected response (missing or expired token):
+#   HTTP/1.1 401 Unauthorized
+#   WWW-Authenticate: Bearer error="invalid_token"
+
+GET {{base}}/me
+Authorization: Bearer {{token}}
+
+###
+
+# ── 3. Get orders ─────────────────────────────────────────────────────────────
+# Protected endpoint — any authenticated user can read all orders in Part 1.
+# Role-scoped access control is added in Part 2.
+#
+# Expected response (valid token):
+#   HTTP/1.1 200 OK
+#   Content-Type: application/json
+#
+#   [
+#     { "id": 1, "item": "Widget A", "quantity": 3, "status": "Shipped"   },
+#     { "id": 2, "item": "Widget B", "quantity": 1, "status": "Pending"   },
+#     { "id": 3, "item": "Widget C", "quantity": 7, "status": "Delivered" }
+#   ]
+#
+# Expected response (missing or expired token):
+#   HTTP/1.1 401 Unauthorized
+
+GET {{base}}/orders
+Authorization: Bearer {{token}}
