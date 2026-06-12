@@ -1,61 +1,96 @@
 ### Shared base URL — change once if port differs
 @base = http://localhost:5050
 
-### Paste a token here after running get-token.sh
-@token = REPLACE_WITH_ACCESS_TOKEN
+### Paste tokens here after running get-token.sh with the appropriate user
+@reader_token = REPLACE_WITH_READER_TOKEN
+@admin_token  = REPLACE_WITH_ADMIN_TOKEN
+@audit_token  = REPLACE_WITH_ADMIN_TOKEN_WITH_AUDIT_SCOPE
 
 
 # ── 1. Health check ───────────────────────────────────────────────────────────
 # No Authorization header required. Load balancers call this endpoint.
 #
-# Expected response:
-#   HTTP/1.1 200 OK
-#   Content-Type: text/plain; charset=utf-8
-#
-#   OK
+# Expected: 200 OK  →  "OK"
 
 GET {{base}}/health
 
 ###
 
 # ── 2. Get current user identity ──────────────────────────────────────────────
-# Reads sub, preferred_username, and email directly from validated JWT claims.
+# Reads sub, preferred_username, and email from the validated JWT.
 #
-# Expected response (valid token):
-#   HTTP/1.1 200 OK
-#   Content-Type: application/json
-#
-#   {
-#     "sub": "a1b2c3d4-...",
-#     "username": "testuser",
-#     "email": "testuser@example.com"
-#   }
-#
-# Expected response (missing or expired token):
-#   HTTP/1.1 401 Unauthorized
-#   WWW-Authenticate: Bearer error="invalid_token"
+# Expected (valid token): 200 OK  →  { "sub": "...", "username": "...", "email": "..." }
+# Expected (no token):    401 Unauthorized
 
 GET {{base}}/me
-Authorization: Bearer {{token}}
+Authorization: Bearer {{reader_token}}
 
 ###
 
-# ── 3. Get orders ─────────────────────────────────────────────────────────────
-# Protected endpoint — any authenticated user can read all orders in Part 1.
-# Role-scoped access control is added in Part 2.
+# ── 3. Get orders — ReadAccess policy ─────────────────────────────────────────
+# Requires api-reader OR api-admin role in realm_access.roles or
+# resource_access.demo-api.roles. A valid JWT with no matching role → 403.
 #
-# Expected response (valid token):
-#   HTTP/1.1 200 OK
-#   Content-Type: application/json
-#
-#   [
-#     { "id": 1, "item": "Widget A", "quantity": 3, "status": "Shipped"   },
-#     { "id": 2, "item": "Widget B", "quantity": 1, "status": "Pending"   },
-#     { "id": 3, "item": "Widget C", "quantity": 7, "status": "Delivered" }
-#   ]
-#
-# Expected response (missing or expired token):
-#   HTTP/1.1 401 Unauthorized
+# Expected (reader token):    200 OK  →  [ { "id": 1, ... }, ... ]
+# Expected (no role in JWT):  403 Forbidden
 
 GET {{base}}/orders
-Authorization: Bearer {{token}}
+Authorization: Bearer {{reader_token}}
+
+###
+
+# ── 3b. Orders — 403 scenario (wrong role) ────────────────────────────────────
+# Replace this token with one from a user who has NO realm or client role.
+# Demonstrates that IClaimsTransformation is the guard, not just token validity.
+#
+# Expected: 403 Forbidden  (valid token, wrong role)
+
+GET {{base}}/orders
+Authorization: Bearer REPLACE_WITH_NO_ROLE_TOKEN
+
+###
+
+# ── 4. Admin users — AdminAccess policy ───────────────────────────────────────
+# Requires api-admin role. api-reader tokens are rejected even though
+# ReadAccess allows them for /orders.
+#
+# Expected (admin token):  200 OK  →  [ { "id": "u1", ... }, ... ]
+# Expected (reader token): 403 Forbidden
+
+GET {{base}}/admin/users
+Authorization: Bearer {{admin_token}}
+
+###
+
+# ── 4b. Admin users — 403 scenario (reader role) ──────────────────────────────
+# Expected: 403 Forbidden  (valid reader token, insufficient role)
+
+GET {{base}}/admin/users
+Authorization: Bearer {{reader_token}}
+
+###
+
+# ── 5. Audit logs — AuditAccess policy ────────────────────────────────────────
+# Requires api-admin role AND the "audit.read" scope in the token.
+# An Admin token without the audit.read scope still gets 403.
+#
+# To mint a token with the audit.read scope, request it explicitly:
+#   curl ... -d "scope=openid audit.read" ...
+#
+# Expected (admin + audit.read scope):  200 OK  →  [ { "timestamp": "...", ... }, ... ]
+# Expected (admin, no audit.read):      403 Forbidden
+# Expected (reader token):              403 Forbidden
+
+GET {{base}}/audit/logs
+Authorization: Bearer {{audit_token}}
+
+###
+
+# ── 5b. Audit logs — 403 scenario (admin role, missing scope) ─────────────────
+# Shows that role alone is not sufficient when a policy uses RequireAssertion
+# to combine role + scope checks.
+#
+# Expected: 403 Forbidden  (valid admin token, no audit.read scope)
+
+GET {{base}}/audit/logs
+Authorization: Bearer {{admin_token}}

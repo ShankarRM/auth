@@ -14,6 +14,18 @@
       to match the runtime to avoid subtle breaking changes across minor bumps.
     -->
     <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="9.0.*" />
+    <!-- Built-in .NET 9 OpenAPI spec generator — produces /openapi/v1.json -->
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi"               Version="9.0.*" />
+    <!-- Scalar UI — reads the OpenAPI spec and renders an interactive API explorer -->
+    <PackageReference Include="Scalar.AspNetCore"                          Version="2.*"   />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Exclude the test project folder so its .cs files don't get compiled into this assembly. -->
+    <Compile Remove="Tests\**" />
+    <Content Remove="Tests\**" />
+    <EmbeddedResource Remove="Tests\**" />
+    <None Remove="Tests\**" />
   </ItemGroup>
 
 </Project>

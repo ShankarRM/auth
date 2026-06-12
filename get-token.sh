@@ -1,13 +1,14 @@
 #!/usr/bin/env bash
-# get-token.sh — Exercise the Keycloak + .NET 8 API from the terminal.
+# get-token.sh — Exercise the Keycloak + .NET API from the terminal.
 #
 # Prerequisites:
-#   - docker compose up -d
-#   - dotnet run (or the API running on port 5000)
-#   - A Keycloak realm named "demo" with:
-#     - A confidential client "demo-api" (direct grants enabled)
-#     - A test user "testuser" / "testpass"
+#   - docker compose up -d  (Keycloak running on port 9093)
+#   - dotnet watch run      (API running on port 5050)
 #   - jq installed: brew install jq
+#
+# Users seeded by demo-realm.json:
+#   testuser  / testpass  → api-reader role
+#   adminuser / adminpass → api-admin role
 #
 # Usage: chmod +x get-token.sh && ./get-token.sh
 
@@ -16,81 +17,133 @@ set -euo pipefail
 KC_URL="http://localhost:9093"
 REALM="demo"
 CLIENT_ID="demo-api"
-USERNAME="testuser"
-PASSWORD="testpass"
 API_URL="http://localhost:5050"
 
-SEPARATOR="────────────────────────────────────────────────────────────"
+SEP="────────────────────────────────────────────────────────────"
 
-echo "$SEPARATOR"
-echo "1. Fetch access token (Resource Owner Password Grant)"
-echo "$SEPARATOR"
+# ── Helper ─────────────────────────────────────────────────────────────────────
 
-# Resource Owner Password Credentials grant is disabled by default in Keycloak.
-# Enable it in the client settings: Authentication flows → Direct access grants.
-# In production you'd use Authorization Code + PKCE instead.
-TOKEN_RESPONSE=$(curl -s -X POST \
-  "${KC_URL}/realms/${REALM}/protocol/openid-connect/token" \
-  -H "Content-Type: application/x-www-form-urlencoded" \
-  --data-urlencode "grant_type=password" \
-  --data-urlencode "client_id=${CLIENT_ID}" \
-  --data-urlencode "username=${USERNAME}" \
-  --data-urlencode "password=${PASSWORD}")
+get_token() {
+  local user="$1" pass="$2" scope="${3:-}"
+  local data="grant_type=password&client_id=${CLIENT_ID}&username=${user}&password=${pass}"
+  [ -n "$scope" ] && data="${data}&scope=${scope}"
 
-# Bail early with the raw error so the reader sees exactly what Keycloak said.
-if echo "$TOKEN_RESPONSE" | jq -e '.error' > /dev/null 2>&1; then
-  echo "Keycloak error:"
-  echo "$TOKEN_RESPONSE" | jq .
-  exit 1
+  curl -s -X POST \
+    "${KC_URL}/realms/${REALM}/protocol/openid-connect/token" \
+    -H "Content-Type: application/x-www-form-urlencoded" \
+    -d "$data"
+}
+
+decode_token() {
+  echo "$1" | jq -r '.access_token | split(".")[1] | @base64d | fromjson'
+}
+
+# ── 1. Reader token ────────────────────────────────────────────────────────────
+echo "$SEP"
+echo "1. Fetch reader token (testuser → api-reader role)"
+echo "$SEP"
+
+READER_RESP=$(get_token "testuser" "testpass")
+if echo "$READER_RESP" | jq -e '.error' > /dev/null 2>&1; then
+  echo "Keycloak error:"; echo "$READER_RESP" | jq .; exit 1
 fi
 
-# Decode the JWT payload (middle segment) so the reader can inspect raw claims.
-echo "$TOKEN_RESPONSE" | jq '{
-  token_type,
-  expires_in,
-  access_token: (.access_token | split(".")[1] | @base64d | fromjson)
-}'
+echo "Raw response:"
+echo "$READER_RESP" | jq .
+echo "Decoded payload:"
+decode_token "$READER_RESP" | jq '{scope, realm_access, resource_access}'
+READER_TOKEN=$(echo "$READER_RESP" | jq -r '.access_token')
 
-ACCESS_TOKEN=$(echo "$TOKEN_RESPONSE" | jq -r '.access_token')
-
+# ── 2. Admin token ─────────────────────────────────────────────────────────────
 echo ""
-echo "$SEPARATOR"
-echo "2. GET /health — anonymous (no token)"
-echo "$SEPARATOR"
+echo "$SEP"
+echo "2. Fetch admin token (adminuser → api-admin role)"
+echo "$SEP"
+
+ADMIN_RESP=$(get_token "adminuser" "adminpass")
+if echo "$ADMIN_RESP" | jq -e '.error' > /dev/null 2>&1; then
+  echo "Keycloak error:"; echo "$ADMIN_RESP" | jq .; exit 1
+fi
+
+echo "Raw response:"
+echo "$ADMIN_RESP" | jq .
+echo "Decoded payload:"
+decode_token "$ADMIN_RESP" | jq '{scope, realm_access, resource_access}'
+ADMIN_TOKEN=$(echo "$ADMIN_RESP" | jq -r '.access_token')
+
+# ── 3. Admin + audit.read scope ────────────────────────────────────────────────
+echo ""
+echo "$SEP"
+echo "3. Fetch admin token WITH audit.read scope"
+echo "$SEP"
+
+AUDIT_RESP=$(get_token "adminuser" "adminpass" "openid profile email audit.read")
+if echo "$AUDIT_RESP" | jq -e '.error' > /dev/null 2>&1; then
+  echo "Keycloak error:"; echo "$AUDIT_RESP" | jq .; exit 1
+fi
+
+echo "Raw response:"
+echo "$AUDIT_RESP" | jq .
+echo "Decoded payload (scope field should include 'audit.read'):"
+decode_token "$AUDIT_RESP" | jq '{scope, realm_access}'
+AUDIT_TOKEN=$(echo "$AUDIT_RESP" | jq -r '.access_token')
+
+# ── 4. /health ─────────────────────────────────────────────────────────────────
+echo ""
+echo "$SEP"
+echo "4. GET /health — anonymous → 200"
+echo "$SEP"
 curl -si "${API_URL}/health"
 echo ""
 
+# ── 5. /me ─────────────────────────────────────────────────────────────────────
 echo ""
-echo "$SEPARATOR"
-echo "3. GET /me — valid token → 200"
-echo "$SEPARATOR"
-curl -s \
-  -H "Authorization: Bearer ${ACCESS_TOKEN}" \
-  "${API_URL}/me" | jq .
+echo "$SEP"
+echo "5. GET /me — reader token → 200"
+echo "$SEP"
+curl -s -H "Authorization: Bearer ${READER_TOKEN}" "${API_URL}/me" | jq .
+
+# ── 6. /orders ─────────────────────────────────────────────────────────────────
+echo ""
+echo "$SEP"
+echo "6. GET /orders — reader token → 200 (ReadAccess policy)"
+echo "$SEP"
+curl -s -H "Authorization: Bearer ${READER_TOKEN}" "${API_URL}/orders" | jq .
 
 echo ""
-echo "$SEPARATOR"
-echo "4. GET /orders — valid token → 200"
-echo "$SEPARATOR"
-curl -s \
-  -H "Authorization: Bearer ${ACCESS_TOKEN}" \
-  "${API_URL}/orders" | jq .
+echo "$SEP"
+echo "7. GET /orders — no token → 401"
+echo "$SEP"
+curl -si "${API_URL}/orders" | head -n 1
+
+# ── 8. /admin/users ────────────────────────────────────────────────────────────
+echo ""
+echo "$SEP"
+echo "8. GET /admin/users — admin token → 200 (AdminAccess policy)"
+echo "$SEP"
+curl -s -H "Authorization: Bearer ${ADMIN_TOKEN}" "${API_URL}/admin/users" | jq .
 
 echo ""
-echo "$SEPARATOR"
-echo "5. GET /me — no token → 401"
-echo "$SEPARATOR"
-# -i shows response headers; grep the status line only
-curl -si "${API_URL}/me" | head -n 1
+echo "$SEP"
+echo "9. GET /admin/users — reader token → 403 (api-reader cannot admin)"
+echo "$SEP"
+curl -si -H "Authorization: Bearer ${READER_TOKEN}" "${API_URL}/admin/users" | head -n 1
+
+# ── 10. /audit/logs ────────────────────────────────────────────────────────────
+echo ""
+echo "$SEP"
+echo "10. GET /audit/logs — admin + audit.read scope → 200 (AuditAccess policy)"
+echo "$SEP"
+curl -s -H "Authorization: Bearer ${AUDIT_TOKEN}" "${API_URL}/audit/logs" | jq .
 
 echo ""
-echo "$SEPARATOR"
-echo "6. GET /me — tampered token → 401"
-echo "$SEPARATOR"
-# Appending characters invalidates the signature. The API verifies the RS256
-# signature against Keycloak's public key (fetched from the JWKS endpoint at
-# startup). Any modification to header, payload, or signature = rejected.
-TAMPERED="${ACCESS_TOKEN}TAMPERED"
-curl -si \
-  -H "Authorization: Bearer ${TAMPERED}" \
-  "${API_URL}/me" | head -n 1
+echo "$SEP"
+echo "11. GET /audit/logs — admin token, NO audit.read scope → 403"
+echo "$SEP"
+curl -si -H "Authorization: Bearer ${ADMIN_TOKEN}" "${API_URL}/audit/logs" | head -n 1
+
+echo ""
+echo "$SEP"
+echo "12. GET /me — tampered token → 401"
+echo "$SEP"
+curl -si -H "Authorization: Bearer ${READER_TOKEN}TAMPERED" "${API_URL}/me" | head -n 1

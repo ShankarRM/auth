@@ -3,8 +3,13 @@
     "http": {
       "commandName": "Project",
       "applicationUrl": "http://localhost:5050",
+      "hotReloadEnabled": true,
+      "hotReloadProfile": "aspnetcore",
       "environmentVariables": {
-        "ASPNETCORE_ENVIRONMENT": "Development"
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        // Automatically restart on "rude edits" (changes that can't be applied via delta —
+        // e.g. adding a new endpoint, changing middleware order) instead of prompting.
+        "DOTNET_WATCH_RESTART_ON_RUDE_EDIT": "true"
       }
     }
   }
