@@ -33,7 +33,6 @@ public static class OrderEndpoints
 
         app.MapGet("/orders/{id:int}", async (int id, IOrderRepository repository, CancellationToken ct) =>
         {
-            // No dedicated use case yet — a real project would have GetOrderByIdUseCase.
             var order = await repository.GetByIdAsync(id, ct);
             return order is null ? Results.NotFound() : Results.Ok(OrderResponse.From(order));
         })
@@ -41,6 +40,25 @@ public static class OrderEndpoints
         .WithName("GetOrderById")
         .WithTags("Orders")
         .WithSummary("Get a single order by ID. Requires api-reader or api-admin role.");
+
+        // Machine-to-machine endpoint — only the background-worker service account can call this.
+        // Two policies are stacked (AND logic): the caller must BOTH be the background-worker
+        // (ServiceAccountOnly checks azp claim) AND hold the api-reader role (ReadAccess).
+        //
+        // WHY AZP INSTEAD OF A SEPARATE ROLE:
+        // Creating a dedicated "service-caller" role works, but azp is simpler for a
+        // single-worker topology — no extra Keycloak role to manage. Use a dedicated role
+        // when multiple workers of different types need different endpoint access.
+        app.MapGet("/orders/service", async (IOrderRepository repository, CancellationToken ct) =>
+        {
+            var orders = await repository.GetAllAsync(ct);
+            return Results.Ok(orders.Select(OrderResponse.From));
+        })
+        .RequireAuthorization(AuthorizationPolicies.ReadAccess)
+        .RequireAuthorization(AuthorizationPolicies.ServiceAccountOnly)
+        .WithName("GetOrdersForService")
+        .WithTags("Orders")
+        .WithSummary("Orders for machine callers only. Requires background-worker azp + api-reader role.");
 
         return app;
     }

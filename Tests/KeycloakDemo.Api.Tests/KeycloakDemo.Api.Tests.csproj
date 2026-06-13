@@ -1,0 +1,41 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk"              Version="17.12.*" />
+    <PackageReference Include="xunit"                               Version="2.9.*"   />
+    <PackageReference Include="xunit.runner.visualstudio"           Version="2.8.*"   >
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+
+    <!--
+      WebApplicationFactory spins up the full API in-process — no real server needed.
+      This package includes Microsoft.AspNetCore.TestHost.
+    -->
+    <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing"   Version="9.0.*"   />
+
+    <!--
+      Used by JwtTokenBuilder to sign test tokens with an in-memory RSA key.
+      The test host accepts this key via PostConfigure<JwtBearerOptions>.
+    -->
+    <PackageReference Include="Microsoft.IdentityModel.Tokens"     Version="8.*"     />
+    <PackageReference Include="System.IdentityModel.Tokens.Jwt"    Version="8.*"     />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!--
+      Reference the API project so WebApplicationFactory<Program> can find Program.
+      Program is declared as a partial class at the end of Program.cs to make it
+      visible outside the assembly.
+    -->
+    <ProjectReference Include="..\..\src\KeycloakDemo.Api\KeycloakDemo.Api.csproj" />
+  </ItemGroup>
+
+</Project>

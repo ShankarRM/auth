@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk.Worker">
+
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>KeycloakDemo.Worker</RootNamespace>
+    <!-- Workers do not serve HTTP traffic — no Web SDK needed. -->
+    <UserSecretsId>keycloak-worker-secrets</UserSecretsId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\KeycloakDemo.Infrastructure\KeycloakDemo.Infrastructure.csproj" />
+    <ProjectReference Include="..\KeycloakDemo.Application\KeycloakDemo.Application.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Worker SDK does not include IHostedService orchestration by default — explicit reference. -->
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="9.0.*" />
+  </ItemGroup>
+
+</Project>
