@@ -1,82 +1,76 @@
-using System.Security.Claims;
 using KeycloakDemo;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
-using Microsoft.IdentityModel.Tokens;
+using Microsoft.Extensions.Options;
 using Scalar.AspNetCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // ── Configuration ─────────────────────────────────────────────────────────────
-var kc = builder.Configuration.GetSection("Keycloak");
 
-// Fail fast: missing config is a deployment error, not a runtime edge case.
-var authority    = kc["Authority"]
-    ?? throw new InvalidOperationException("Keycloak:Authority is required in appsettings.");
-var audience     = kc["Audience"]
-    ?? throw new InvalidOperationException("Keycloak:Audience is required in appsettings.");
-var requireHttps = kc.GetValue<bool>("RequireHttpsMetadata", defaultValue: true);
+// Bind appsettings "Keycloak" section → KeycloakOptions.
+// ValidateDataAnnotations checks [Required] fields.
+// ValidateOnStart throws before the host accepts any request — missing config is
+// a deployment error caught at startup, not a 500 at runtime.
+builder.Services.AddOptions<KeycloakOptions>()
+    .BindConfiguration("Keycloak")       // reads appsettings.json → Keycloak:{Authority,Audience,...}
+    .ValidateDataAnnotations()           // enforces [Required] on KeycloakOptions properties
+    .ValidateOnStart();                  // fails immediately at host start, not on first request
 
 // ── Authentication ─────────────────────────────────────────────────────────────
+
+// Register JWT Bearer as the default authentication scheme.
+// No inline config here — ConfigureJwtBearerOptions (below) wires the options
+// after KeycloakOptions has been validated.
 builder.Services
-    .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
-    .AddJwtBearer(options =>
-    {
-        options.Authority            = authority;
-        options.Audience             = audience;
-        options.RequireHttpsMetadata = requireHttps;
+    .AddAuthentication(JwtBearerDefaults.AuthenticationScheme) // sets default scheme to "Bearer"
+    .AddJwtBearer();                                           // registers JwtBearerHandler
 
-        // MapInboundClaims: false — preserves raw OIDC claim names (sub, email,
-        // preferred_username) instead of renaming them to verbose WS-Federation URIs.
-        options.MapInboundClaims = false;
-
-        options.TokenValidationParameters = new TokenValidationParameters
-        {
-            ValidateIssuer   = true,
-            ValidateAudience = true,
-            ValidateLifetime = true,
-            NameClaimType    = "preferred_username",
-
-            // Tell the framework which claim type holds role values. Must match
-            // what KeycloakRoleClaimsTransformation writes so that IsInRole() and
-            // policy RequireRole() checks find the right claims.
-            RoleClaimType = ClaimTypes.Role,
-        };
-    });
+// IConfigureOptions<JwtBearerOptions> is resolved lazily by DI when the auth
+// middleware first needs JwtBearerOptions. By that point ValidateOnStart has
+// already run, so kc.Value is guaranteed non-null.
+builder.Services.AddSingleton<IConfigureOptions<JwtBearerOptions>, ConfigureJwtBearerOptions>();
 
 // ── OpenAPI ────────────────────────────────────────────────────────────────────
+
+// Registers the built-in .NET 9 OpenAPI spec generator (produces /openapi/v1.json).
+// The document transformer runs once at spec generation time — not per request.
 builder.Services.AddOpenApi(options =>
 {
-    // Inject a Bearer security scheme so Scalar shows the "Authorize" button.
-    // Without this, the UI renders but every protected endpoint returns 401 with no way to auth.
     options.AddDocumentTransformer((doc, _, _) =>
     {
+        // Set human-readable metadata shown in the Scalar UI header.
         doc.Info.Title   = "Keycloak Demo API";
         doc.Info.Version = "v1";
         doc.Info.Description =
             "Part 2: IClaimsTransformation & Domain Roles. " +
             "Obtain a Bearer token via Keycloak and paste it using the Authorize button.";
 
+        // Declare the "Bearer" security scheme so Scalar renders the Authorize button.
+        // Without this entry under Components.SecuritySchemes, the UI has no way to
+        // collect or send an Authorization header.
         doc.Components ??= new();
         doc.Components.SecuritySchemes ??= new Dictionary<string, Microsoft.OpenApi.Models.OpenApiSecurityScheme>();
         doc.Components.SecuritySchemes["Bearer"] = new()
         {
-            Type        = Microsoft.OpenApi.Models.SecuritySchemeType.Http,
-            Scheme      = "bearer",
+            Type         = Microsoft.OpenApi.Models.SecuritySchemeType.Http,
+            Scheme       = "bearer",   // lowercase required by OpenAPI spec
             BearerFormat = "JWT",
-            Description = "Paste the access_token from Keycloak (without the 'Bearer ' prefix).",
+            Description  = "Paste the access_token from Keycloak (without the 'Bearer ' prefix).",
         };
 
-        // Apply the scheme globally — every endpoint requires auth unless it has AllowAnonymous.
+        // Apply the Bearer scheme to every endpoint globally.
+        // Endpoints decorated with [AllowAnonymous] still appear but are exempt at runtime.
         doc.SecurityRequirements ??= [];
         doc.SecurityRequirements.Add(new()
         {
             {
                 new Microsoft.OpenApi.Models.OpenApiSecurityScheme
                 {
+                    // Reference by Id so this points to the scheme declared above.
                     Reference = new() { Type = Microsoft.OpenApi.Models.ReferenceType.SecurityScheme, Id = "Bearer" }
                 },
-                []
+                [] // empty scopes list — JWT Bearer doesn't use OAuth scopes at this level
             }
         });
 
@@ -85,109 +79,54 @@ builder.Services.AddOpenApi(options =>
 });
 
 // ── Authorization ──────────────────────────────────────────────────────────────
+
+// Register named policies (ReadAccess, AdminAccess, AuditAccess).
+// AuthorizationPolicies.AddPolicies is an Action<AuthorizationOptions> defined
+// in AuthorizationPolicies.cs.
 builder.Services.AddAuthorization(AuthorizationPolicies.AddPolicies);
 
-// Scoped, not Singleton: IClaimsTransformation runs per-request inside the
-// authentication middleware. A future extension (Part 3) will inject
-// IHttpContextAccessor, which is inherently scoped — registering as Scoped now
-// avoids a captive-dependency bug before it can happen.
+// IClaimsTransformation runs once per authentication event (not per request).
+// KeycloakRoleClaimsTransformation reads realm/client roles from the Keycloak
+// JWT and maps them to ClaimTypes.Role so IsInRole() and policy checks work.
+// Scoped (not Singleton) because a future version will need IHttpContextAccessor,
+// which is scoped — avoiding a captive-dependency bug before it arises.
 builder.Services.AddScoped<IClaimsTransformation, KeycloakRoleClaimsTransformation>();
 
+// ── Build ──────────────────────────────────────────────────────────────────────
+
+// Finalises the DI container and creates the WebApplication.
+// ValidateOnStart fires here — bad config throws before any middleware runs.
 var app = builder.Build();
 
-// Serves the raw OpenAPI JSON spec consumed by Scalar.
-// Restrict to Development — the spec reveals endpoint names, parameter shapes, and
-// security schemes that should not be exposed on production without explicit intent.
+// ── Middleware pipeline ────────────────────────────────────────────────────────
+
+// Only expose OpenAPI spec and Scalar UI in Development.
+// The spec reveals endpoint shapes and security schemes — not safe on production
+// without explicit opt-in.
 if (app.Environment.IsDevelopment())
 {
-    app.MapOpenApi();  // → GET /openapi/v1.json
+    app.MapOpenApi();                   // → GET /openapi/v1.json  (raw spec)
 
     app.MapScalarApiReference(options =>
     {
-        options.Title            = "Keycloak Demo API";
-        options.Theme            = ScalarTheme.Purple;
+        options.Title             = "Keycloak Demo API";
+        options.Theme             = ScalarTheme.Purple;
         options.DefaultHttpClient = new(ScalarTarget.Http, ScalarClient.Http11);
-    });  // → GET /scalar/v1
+    });                                 // → GET /scalar/v1  (interactive UI)
 }
 
-// UseAuthentication must precede UseAuthorization. The authentication middleware
-// decodes the Bearer token, populates HttpContext.User, and runs IClaimsTransformation.
-// The authorization middleware then evaluates policies against that populated identity.
+// ORDER MATTERS: Authentication must run before Authorization.
+// UseAuthentication decodes the Bearer token, validates it, populates
+// HttpContext.User, and runs IClaimsTransformation (adds domain roles).
+// UseAuthorization then evaluates policies against that populated identity.
 app.UseAuthentication();
 app.UseAuthorization();
 
 // ── Endpoints ─────────────────────────────────────────────────────────────────
-
-// Anonymous liveness probe — load balancers and k8s probes call this without a token.
-app.MapGet("/health", () => Results.Ok("OK"))
-   .AllowAnonymous()
-   .WithName("Health")
-   .WithTags("System")
-   .WithSummary("Liveness probe — no token required.");
-
-// Returns identity claims from the validated JWT. Any valid token is sufficient.
-app.MapGet("/me", (HttpContext ctx) =>
-{
-    var sub      = ctx.User.FindFirst("sub")?.Value;
-    var username = ctx.User.FindFirst("preferred_username")?.Value;
-    var email    = ctx.User.FindFirst("email")?.Value;
-
-    return Results.Ok(new { sub, username, email });
-})
-.RequireAuthorization()
-.WithName("GetMe")
-.WithTags("Identity")
-.WithSummary("Returns sub, preferred_username, and email from the validated JWT.");
-
-// Requires Reader or Admin role (ReadAccess policy). A valid JWT with no
-// matching role still gets a 403 — Part 1's "any token" rule is now tightened.
-app.MapGet("/orders", () =>
-{
-    var orders = new[]
-    {
-        new { Id = 1, Item = "Widget A", Quantity = 3, Status = "Shipped"   },
-        new { Id = 2, Item = "Widget B", Quantity = 1, Status = "Pending"   },
-        new { Id = 3, Item = "Widget C", Quantity = 7, Status = "Delivered" },
-    };
-
-    return Results.Ok(orders);
-})
-.RequireAuthorization(AuthorizationPolicies.ReadAccess)
-.WithName("GetOrders")
-.WithTags("Orders")
-.WithSummary("List orders. Requires api-reader or api-admin role.");
-
-// Admin-only: list all users. Reader and Supervisor tokens → 403.
-app.MapGet("/admin/users", () =>
-{
-    var users = new[]
-    {
-        new { Id = "u1", Username = "alice", Roles = new[] { "api-admin"  } },
-        new { Id = "u2", Username = "bob",   Roles = new[] { "api-reader" } },
-    };
-
-    return Results.Ok(users);
-})
-.RequireAuthorization(AuthorizationPolicies.AdminAccess)
-.WithName("GetAdminUsers")
-.WithTags("Admin")
-.WithSummary("List all users. Requires api-admin role.");
-
-// Admin + audit.read scope: demonstrates that role alone is not always enough.
-// An Admin without the audit.read scope in their token still gets 403 here.
-app.MapGet("/audit/logs", () =>
-{
-    var logs = new[]
-    {
-        new { Timestamp = "2024-01-15T10:00:00Z", Action = "USER_CREATED",  Actor = "alice" },
-        new { Timestamp = "2024-01-15T11:23:00Z", Action = "ROLE_ASSIGNED", Actor = "alice" },
-    };
-
-    return Results.Ok(logs);
-})
-.RequireAuthorization(AuthorizationPolicies.AuditAccess)
-.WithName("GetAuditLogs")
-.WithTags("Audit")
-.WithSummary("List audit logs. Requires api-admin role AND audit.read scope.");
+app.MapHealthEndpoints();    // GET /health            — anonymous liveness probe
+app.MapIdentityEndpoints();  // GET /me                — returns claims from JWT
+app.MapOrderEndpoints();     // GET /orders            — requires api-reader or api-admin
+app.MapAdminEndpoints();     // GET /admin/users       — requires api-admin
+                             // GET /audit/logs        — requires api-admin + audit.read scope
 
 app.Run();

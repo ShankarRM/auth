@@ -21,11 +21,11 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- Exclude the test project folder so its .cs files don't get compiled into this assembly. -->
-    <Compile Remove="Tests\**" />
-    <Content Remove="Tests\**" />
-    <EmbeddedResource Remove="Tests\**" />
-    <None Remove="Tests\**" />
+    <!-- Exclude nested projects — their .cs files must not be compiled into this assembly. -->
+    <Compile Remove="Tests\**;src\**" />
+    <Content Remove="Tests\**;src\**" />
+    <EmbeddedResource Remove="Tests\**;src\**" />
+    <None Remove="Tests\**;src\**" />
   </ItemGroup>
 
 </Project>
