@@ -1,0 +1,39 @@
+using KeycloakDemo.Infrastructure.Auth;
+
+namespace KeycloakDemo.Api.Endpoints;
+
+public static class AdminEndpoints
+{
+    public static IEndpointRouteBuilder MapAdminEndpoints(this IEndpointRouteBuilder app)
+    {
+        app.MapGet("/admin/users", () =>
+        {
+            var users = new[]
+            {
+                new { Id = "u1", Username = "testuser",  Roles = new[] { "api-reader" } },
+                new { Id = "u2", Username = "adminuser", Roles = new[] { "api-admin"  } },
+            };
+            return Results.Ok(users);
+        })
+        .RequireAuthorization(AuthorizationPolicies.AdminAccess)
+        .WithName("GetAdminUsers")
+        .WithTags("Admin")
+        .WithSummary("List users. Requires api-admin role.");
+
+        app.MapGet("/audit/logs", () =>
+        {
+            var logs = new[]
+            {
+                new { Timestamp = "2024-01-15T10:00:00Z", Action = "USER_CREATED",  Actor = "adminuser" },
+                new { Timestamp = "2024-01-15T11:23:00Z", Action = "ROLE_ASSIGNED", Actor = "adminuser" },
+            };
+            return Results.Ok(logs);
+        })
+        .RequireAuthorization(AuthorizationPolicies.AuditAccess)
+        .WithName("GetAuditLogs")
+        .WithTags("Audit")
+        .WithSummary("List audit logs. Requires api-admin role AND audit.read scope.");
+
+        return app;
+    }
+}

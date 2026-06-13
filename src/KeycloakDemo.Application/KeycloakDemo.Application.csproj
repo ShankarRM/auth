@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Application knows only Domain. No Infrastructure, no ASP.NET Core. -->
+    <ProjectReference Include="..\KeycloakDemo.Domain\KeycloakDemo.Domain.csproj" />
+    <!--
+      Microsoft.Extensions.DependencyInjection.Abstractions for IServiceCollection
+      in DependencyInjection.cs. Abstractions only — no runtime DI container pulled in.
+    -->
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="9.0.*" />
+  </ItemGroup>
+
+</Project>

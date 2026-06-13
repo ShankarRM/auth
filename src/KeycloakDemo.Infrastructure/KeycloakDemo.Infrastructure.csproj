@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\KeycloakDemo.Domain\KeycloakDemo.Domain.csproj" />
+    <ProjectReference Include="..\KeycloakDemo.Application\KeycloakDemo.Application.csproj" />
+
+    <!--
+      FrameworkReference gives access to IHttpContextAccessor, IAuthorizationRequirement,
+      and the rest of the ASP.NET Core shared framework without pulling in the Web SDK.
+    -->
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+
+    <!--
+      JwtBearer is NOT in the shared framework — explicit package required.
+      Pin major to match the runtime.
+    -->
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="9.0.*" />
+  </ItemGroup>
+
+</Project>
