@@ -1,7 +1,7 @@
 services:
   keycloak:
     image: quay.io/keycloak/keycloak:26.1.0
-    command: start-dev --import-realm
+    command: start-dev --import-realm --health-enabled=true
     environment:
       KEYCLOAK_ADMIN: admin
       KEYCLOAK_ADMIN_PASSWORD: admin
@@ -13,9 +13,9 @@ services:
       # Delete the named volume and restart to re-import after changes.
       - ./keycloak/demo-realm.json:/opt/keycloak/data/import/demo-realm.json:ro
     healthcheck:
-      # /health/ready is Keycloak's own readiness probe — it returns 200 only
-      # after the server has fully booted and the database migrations are done.
-      test: ["CMD-SHELL", "curl -f http://localhost:8080/health/ready || exit 1"]
+      # Keycloak 25+ serves health on management port 9000, not main port 8080.
+      # --health-enabled=true is required or the endpoint returns 404.
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/localhost/9000 && printf 'GET /health/ready HTTP/1.0\\r\\nHost: localhost\\r\\n\\r\\n' >&3 && cat <&3 | grep -q '200 OK'"]
       interval: 30s
       timeout: 10s
       retries: 5
