@@ -3,7 +3,7 @@
 #
 # Prerequisites:
 #   - docker compose up -d
-#   - dotnet run (or the API running on port 5000)
+#   - dotnet run (or the API running on port 5050)
 #   - A Keycloak realm named "demo" with:
 #     - A confidential client "demo-api" (direct grants enabled)
 #     - A test user "testuser" / "testpass"

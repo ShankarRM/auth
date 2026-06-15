@@ -1,10 +1,10 @@
-# Keycloak + .NET 8 Web API — Part 1
+# Keycloak + .NET 9 Web API — Part 1
 
-Source code for the blog series **"Identity Foundations: Keycloak + .NET 8 Web API from Scratch"**.
+Source code for the blog series **"Identity Foundations: Keycloak + .NET 9 Web API from Scratch"**.
 
 ## Prerequisites
 
-- [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8)
+- [.NET 9 SDK](https://dotnet.microsoft.com/download/dotnet/9)
 - Docker + Docker Compose
 - `jq` (`brew install jq`)
 
@@ -16,13 +16,7 @@ docker compose up -d
 
 Admin console: `http://localhost:9093` — credentials `admin` / `admin`
 
-### Keycloak setup (one-time)
-
-1. Create realm `demo`
-2. Create client `demo-api`
-   - Client authentication: **On**
-   - Authentication flows: enable **Direct access grants**
-3. Create test user `testuser` / `testpass`
+Realm, client (`demo-api`), and test user (`testuser` / `testpass`) are imported automatically from `keycloak/demo-realm.json` on first boot. No manual setup required.
 
 ## Run the API
 
@@ -44,11 +38,13 @@ API listens on `http://localhost:5050`. Port 5000 is reserved by macOS AirPlay.
 
 ## Endpoints
 
-| Method | Path      | Auth     | Description                          |
-|--------|-----------|----------|--------------------------------------|
-| GET    | /health   | None     | Liveness probe                       |
-| GET    | /me       | Bearer   | Returns `sub`, `username`, `email`   |
-| GET    | /orders   | Bearer   | Returns hardcoded order list         |
+| Method | Path      | Auth          | Response | Description                          |
+|--------|-----------|---------------|----------|--------------------------------------|
+| GET    | /health   | None          | 200      | Liveness probe                       |
+| GET    | /me       | Bearer        | 200      | Returns `sub`, `username`, `email`   |
+| GET    | /orders   | Bearer        | 200      | Returns hardcoded order list         |
+| GET    | /me       | No token      | 401      | Missing `Authorization` header       |
+| GET    | /me       | Invalid token | 401      | Expired, tampered, or wrong audience |
 
 ## Project structure
 
