@@ -2,6 +2,7 @@ using System.Security.Claims;
 using System.Text.Json;
 using KeycloakDemo;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
 namespace KeycloakDemo.Tests;
@@ -21,7 +22,7 @@ public class KeycloakRoleClaimsTransformationTests
             })
             .Build();
 
-        _sut = new KeycloakRoleClaimsTransformation(config);
+        _sut = new KeycloakRoleClaimsTransformation(config, NullLogger<KeycloakRoleClaimsTransformation>.Instance);
     }
 
     [Fact]
@@ -80,7 +81,7 @@ public class KeycloakRoleClaimsTransformationTests
     }
 
     [Fact]
-    public async Task TransformAsync_InvalidRealmAccessJson_DoesNotThrow()
+    public async Task TransformAsync_InvalidRealmAccessJson_ThrowsMalformedClaimException()
     {
         var identity = new ClaimsIdentity(
             [
@@ -90,10 +91,27 @@ public class KeycloakRoleClaimsTransformationTests
             "test");
         var principal = new ClaimsPrincipal(identity);
 
-        // Must not throw — silently skip malformed claims rather than crashing the request.
-        var result = await _sut.TransformAsync(principal);
+        var ex = await Assert.ThrowsAsync<MalformedClaimException>(
+            () => _sut.TransformAsync(principal));
 
-        Assert.DoesNotContain(result.Claims, c => c.Type == ClaimTypes.Role);
+        Assert.Equal("realm_access", ex.ClaimName);
+    }
+
+    [Fact]
+    public async Task TransformAsync_InvalidResourceAccessJson_ThrowsMalformedClaimException()
+    {
+        var identity = new ClaimsIdentity(
+            [
+                new Claim("sub", "user-1"),
+                new Claim("resource_access", "NOT-VALID-JSON"),
+            ],
+            "test");
+        var principal = new ClaimsPrincipal(identity);
+
+        var ex = await Assert.ThrowsAsync<MalformedClaimException>(
+            () => _sut.TransformAsync(principal));
+
+        Assert.Equal("resource_access", ex.ClaimName);
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────────────

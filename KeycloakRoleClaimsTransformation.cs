@@ -17,16 +17,12 @@ namespace KeycloakDemo;
 /// </list>
 /// Neither maps automatically to <see cref="ClaimTypes.Role"/>; this transformer bridges the gap.
 /// </remarks>
-public sealed class KeycloakRoleClaimsTransformation : IClaimsTransformation
+public sealed class KeycloakRoleClaimsTransformation(
+    IConfiguration configuration,
+    ILogger<KeycloakRoleClaimsTransformation> logger) : IClaimsTransformation
 {
-    private readonly string _clientId;
-
-    public KeycloakRoleClaimsTransformation(IConfiguration configuration)
-    {
-        // The Keycloak audience is the same string used as the key under resource_access.
-        _clientId = configuration["Keycloak:Audience"]
-            ?? throw new InvalidOperationException("Keycloak:Audience is required.");
-    }
+    private readonly string _clientId = configuration["Keycloak:Audience"]
+        ?? throw new InvalidOperationException("Keycloak:Audience is required.");
 
     /// <summary>
     /// Reads realm and client roles from the principal and re-emits them as
@@ -38,6 +34,10 @@ public sealed class KeycloakRoleClaimsTransformation : IClaimsTransformation
     /// it checks for existing role claims before adding, so repeated calls
     /// produce the same result without growing the claim set.
     /// </remarks>
+    /// <exception cref="MalformedClaimException">
+    /// Thrown when <c>realm_access</c> or <c>resource_access</c> exists but contains
+    /// invalid JSON. The global exception handler maps this to 401 Unauthorized.
+    /// </exception>
     public Task<ClaimsPrincipal> TransformAsync(ClaimsPrincipal principal)
     {
         // Always clone — mutating the incoming principal violates the contract
@@ -51,7 +51,7 @@ public sealed class KeycloakRoleClaimsTransformation : IClaimsTransformation
         return Task.FromResult(cloned);
     }
 
-    private static void AddRealmRoles(ClaimsIdentity identity, ClaimsPrincipal source)
+    private void AddRealmRoles(ClaimsIdentity identity, ClaimsPrincipal source)
     {
         // realm_access JSON shape: { "roles": ["offline_access", "api-admin", ...] }
         var realmAccessClaim = source.FindFirst("realm_access");
@@ -62,11 +62,13 @@ public sealed class KeycloakRoleClaimsTransformation : IClaimsTransformation
         {
             realmAccess = JsonDocument.Parse(realmAccessClaim.Value).RootElement;
         }
-        catch (JsonException)
+        catch (JsonException ex)
         {
-            // Malformed claim — skip rather than crash. Real Keycloak tokens are always
-            // valid JSON; this path exists to guard synthetic or hand-crafted test tokens.
-            return;
+            // Throw, don't return: a present-but-corrupt claim is suspicious — returning
+            // would silently grant no roles, which passes anonymous endpoints and could
+            // mask a tampered token. Throwing lets the exception handler return 401.
+            logger.LogWarning(ex, "realm_access claim contains invalid JSON.");
+            throw new MalformedClaimException("realm_access", ex);
         }
 
         if (!realmAccess.TryGetProperty("roles", out var rolesEl)) return;
@@ -94,9 +96,11 @@ public sealed class KeycloakRoleClaimsTransformation : IClaimsTransformation
         {
             resourceAccess = JsonDocument.Parse(resourceAccessClaim.Value).RootElement;
         }
-        catch (JsonException)
+        catch (JsonException ex)
         {
-            return;
+            // Same reasoning as AddRealmRoles: throw to 401, not silent return.
+            logger.LogWarning(ex, "resource_access claim contains invalid JSON.");
+            throw new MalformedClaimException("resource_access", ex);
         }
 
         // Only project roles for our client — other clients' roles must not bleed

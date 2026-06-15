@@ -95,6 +95,22 @@ builder.Services.AddScoped<IClaimsTransformation, KeycloakRoleClaimsTransformati
 
 var app = builder.Build();
 
+// Catches MalformedClaimException thrown by IClaimsTransformation and returns 401.
+// Must be registered before UseAuthentication so it wraps the auth middleware pipeline.
+app.UseExceptionHandler(errApp => errApp.Run(async ctx =>
+{
+    var feature = ctx.Features.Get<Microsoft.AspNetCore.Diagnostics.IExceptionHandlerFeature>();
+    if (feature?.Error is MalformedClaimException)
+    {
+        ctx.Response.StatusCode  = StatusCodes.Status401Unauthorized;
+        ctx.Response.ContentType = "application/json";
+        await ctx.Response.WriteAsync(
+            """{"error":"invalid_token","error_description":"A JWT claim contained malformed data."}""");
+        return;
+    }
+    ctx.Response.StatusCode = StatusCodes.Status500InternalServerError;
+}));
+
 // Serves the raw OpenAPI JSON spec consumed by Scalar.
 // Restrict to Development — the spec reveals endpoint names, parameter shapes, and
 // security schemes that should not be exposed on production without explicit intent.
