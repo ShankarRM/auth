@@ -3,3 +3,19 @@ obj/
 .vs/
 *.user
 .DS_Store
+
+# Production secrets — never commit
+.env.prod
+.env.*.local
+
+# Generated TLS certificates
+nginx/certs/*.crt
+nginx/certs/*.key
+nginx/certs/*.pem
+
+# Sealed Secrets / External Secrets — actual values
+k8s/secrets/*-sealed.yaml
+k8s/secrets/*-secret.yaml
+
+# Local docs
+docs/
