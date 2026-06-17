@@ -112,38 +112,44 @@ curl -s -H "Authorization: Bearer ${READER_TOKEN}" "${API_URL}/orders" | jq .
 
 echo ""
 echo "$SEP"
-echo "7. GET /orders — no token → 401"
+echo "7. GET /orders — admin token → 200 (all 5 orders)"
+echo "$SEP"
+curl -s -H "Authorization: Bearer ${ADMIN_TOKEN}" "${API_URL}/orders" | jq .
+
+echo ""
+echo "$SEP"
+echo "8. GET /orders — no token → 401"
 echo "$SEP"
 curl -si "${API_URL}/orders" | head -n 1
 
-# ── 8. /admin/users ────────────────────────────────────────────────────────────
+# ── 9. /admin/users ────────────────────────────────────────────────────────────
 echo ""
 echo "$SEP"
-echo "8. GET /admin/users — admin token → 200 (AdminAccess policy)"
+echo "9. GET /admin/users — admin token → 200 (AdminAccess policy)"
 echo "$SEP"
 curl -s -H "Authorization: Bearer ${ADMIN_TOKEN}" "${API_URL}/admin/users" | jq .
 
 echo ""
 echo "$SEP"
-echo "9. GET /admin/users — reader token → 403 (api-reader cannot admin)"
+echo "10. GET /admin/users — reader token → 403 (api-reader cannot admin)"
 echo "$SEP"
 curl -si -H "Authorization: Bearer ${READER_TOKEN}" "${API_URL}/admin/users" | head -n 1
 
-# ── 10. /audit/logs ────────────────────────────────────────────────────────────
+# ── 11. /audit/logs ────────────────────────────────────────────────────────────
 echo ""
 echo "$SEP"
-echo "10. GET /audit/logs — admin + audit.read scope → 200 (AuditAccess policy)"
+echo "11. GET /audit/logs — admin + audit.read scope → 200 (AuditAccess policy)"
 echo "$SEP"
 curl -s -H "Authorization: Bearer ${AUDIT_TOKEN}" "${API_URL}/audit/logs" | jq .
 
 echo ""
 echo "$SEP"
-echo "11. GET /audit/logs — admin token, NO audit.read scope → 403"
+echo "12. GET /audit/logs — admin token, NO audit.read scope → 403"
 echo "$SEP"
 curl -si -H "Authorization: Bearer ${ADMIN_TOKEN}" "${API_URL}/audit/logs" | head -n 1
 
 echo ""
 echo "$SEP"
-echo "12. GET /me — tampered token → 401"
+echo "13. GET /me — tampered token → 401"
 echo "$SEP"
 curl -si -H "Authorization: Bearer ${READER_TOKEN}TAMPERED" "${API_URL}/me" | head -n 1
