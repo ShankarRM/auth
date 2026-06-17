@@ -1,10 +1,10 @@
-# Keycloak + .NET 8 Web API — Part 1
+# Keycloak + .NET 9 Web API — Part 3
 
-Source code for the blog series **"Identity Foundations: Keycloak + .NET 8 Web API from Scratch"**.
+Source code for the blog series **"Identity Foundations: Keycloak + .NET 9 Web API from Scratch"**.
 
 ## Prerequisites
 
-- [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8)
+- [.NET 9 SDK](https://dotnet.microsoft.com/download/dotnet/9)
 - Docker + Docker Compose
 - `jq` (`brew install jq`)
 
@@ -16,56 +16,64 @@ docker compose up -d
 
 Admin console: `http://localhost:9093` — credentials `admin` / `admin`
 
-### Keycloak setup (one-time)
+Realm, client (`demo-api`), and users are imported automatically from `keycloak/demo-realm.json` on first boot. No manual setup required.
 
-1. Create realm `demo`
-2. Create client `demo-api`
-   - Client authentication: **On**
-   - Authentication flows: enable **Direct access grants**
-3. Create test user `testuser` / `testpass`
+**Users seeded:**
+
+| Username | Password | Role       | Orders visible      |
+|----------|----------|------------|---------------------|
+| `alice`  | `alice`  | api-reader | own orders (1–3)    |
+| `bob`    | `bob`    | api-admin  | all orders (1–5)    |
 
 ## Run the API
 
 ```bash
-dotnet run
+dotnet run --project src/KeycloakDemo.Api
 ```
 
-API listens on `http://localhost:5050`. Port 5000 is reserved by macOS AirPlay.
+API listens on `http://localhost:5050`.
 
 ## Test
 
 ```bash
-# All scenarios in one shot
 ./get-token.sh
-
-# Or use the REST Client file in VS Code / Rider
-# Set @token in KeycloakDemo.http, then send requests
 ```
 
 ## Endpoints
 
-| Method | Path      | Auth     | Description                          |
-|--------|-----------|----------|--------------------------------------|
-| GET    | /health   | None     | Liveness probe                       |
-| GET    | /me       | Bearer   | Returns `sub`, `username`, `email`   |
-| GET    | /orders   | Bearer   | Returns hardcoded order list         |
+| Method | Path          | Auth          | Response | Description                              |
+|--------|---------------|---------------|----------|------------------------------------------|
+| GET    | /health       | None          | 200      | Liveness probe                           |
+| GET    | /me           | Bearer        | 200      | Returns `sub`, `username`, `email`       |
+| GET    | /orders       | Bearer        | 200      | Reader sees own; admin sees all          |
+| GET    | /admin/users  | Bearer        | 200      | Requires `api-admin` role                |
+| GET    | /audit/logs   | Bearer        | 200      | Requires `api-admin` + `audit.read` scope|
+| GET    | /orders       | No token      | 401      | Missing `Authorization` header           |
+| GET    | /orders       | Invalid token | 401      | Expired, tampered, or wrong audience     |
+| GET    | /admin/users  | Reader token  | 403      | Insufficient role                        |
+| GET    | /audit/logs   | No scope      | 403      | Admin token without `audit.read` scope   |
 
 ## Project structure
 
 ```
-docker-compose.yml        # Keycloak 26.1.0 on :9093
-KeycloakDemo.csproj
-Program.cs                # Minimal API, JWT auth wired
-appsettings.json          # Keycloak:Authority / Audience / RequireHttpsMetadata
-appsettings.Development.json  # HTTPS off, Trace auth logging
-KeycloakDemo.http         # VS Code REST Client requests
-get-token.sh              # curl-based end-to-end test script
+docker-compose.yml                    # Keycloak 26.1.0 on :9093
+get-token.sh                          # curl end-to-end test script
+keycloak/demo-realm.json              # Realm export — auto-imported on first boot
+src/
+  KeycloakDemo.Api/                   # Minimal API, endpoints, Program.cs
+  KeycloakDemo.Application/           # Use cases, ICurrentUser, IOrderRepository
+  KeycloakDemo.Domain/                # Order entity, DomainRole enum
+  KeycloakDemo.Infrastructure/        # CurrentUserService, InMemoryOrderRepository
+Tests/
+  KeycloakDemo.Application.Tests/     # Use case tests — no ASP.NET Core dependency
 ```
 
 ## Series
 
 | Part | Topic |
 |------|-------|
-| **1** | JWT Bearer auth, claim extraction ← you are here |
+| 1 | JWT Bearer auth, claim extraction |
 | 2 | Role-based authorization via `IClaimsTransformation` |
-| 3 | Clean Architecture layering |
+| **3** | Clean Architecture — use cases, domain roles, testable business logic ← you are here |
+| 4 | Machine-to-machine auth: client credentials & worker service |
+| 5 | Token lifecycle: refresh, rotation, revocation, blocklist |
