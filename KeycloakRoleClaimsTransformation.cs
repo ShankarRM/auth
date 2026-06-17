@@ -98,7 +98,9 @@ public sealed class KeycloakRoleClaimsTransformation(
         }
         catch (JsonException ex)
         {
-            // Same reasoning as AddRealmRoles: throw to 401, not silent return.
+            // Throw, don't return: a present-but-corrupt claim is suspicious — returning
+            // would silently grant no roles, which passes anonymous endpoints and could
+            // mask a tampered token. Throwing lets the exception handler return 401.
             logger.LogWarning(ex, "resource_access claim contains invalid JSON.");
             throw new MalformedClaimException("resource_access", ex);
         }
