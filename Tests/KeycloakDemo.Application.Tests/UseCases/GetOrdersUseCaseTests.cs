@@ -14,8 +14,8 @@ namespace KeycloakDemo.Application.Tests.UseCases;
 file sealed class FakeCurrentUser : ICurrentUser
 {
     public string  UserId         { get; init; } = "user-1";
-    public string  Username       { get; init; } = "testuser";
-    public string  Email          { get; init; } = "test@example.com";
+    public string  Username       { get; init; } = "alice";
+    public string  Email          { get; init; } = "alice@example.com";
     public bool    IsAuthenticated { get; init; } = true;
 
     private readonly HashSet<DomainRole> _roles;

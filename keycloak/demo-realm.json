@@ -238,26 +238,26 @@
 
   "users": [
     {
-      "username": "testuser",
+      "username": "alice",
       "enabled": true,
-      "email": "testuser@example.com",
-      "firstName": "Test",
-      "lastName": "User",
+      "email": "alice@example.com",
+      "firstName": "Alice",
+      "lastName": "Reader",
       "emailVerified": true,
       "credentials": [
-        { "type": "password", "value": "testpass", "temporary": false }
+        { "type": "password", "value": "alice", "temporary": false }
       ],
       "realmRoles": ["api-reader"]
     },
     {
-      "username": "adminuser",
+      "username": "bob",
       "enabled": true,
-      "email": "adminuser@example.com",
-      "firstName": "Admin",
-      "lastName": "User",
+      "email": "bob@example.com",
+      "firstName": "Bob",
+      "lastName": "Admin",
       "emailVerified": true,
       "credentials": [
-        { "type": "password", "value": "adminpass", "temporary": false }
+        { "type": "password", "value": "bob", "temporary": false }
       ],
       "realmRoles": ["api-admin"]
     }

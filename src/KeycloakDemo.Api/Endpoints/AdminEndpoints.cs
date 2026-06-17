@@ -10,8 +10,8 @@ public static class AdminEndpoints
         {
             var users = new[]
             {
-                new { Id = "u1", Username = "testuser",  Roles = new[] { "api-reader" } },
-                new { Id = "u2", Username = "adminuser", Roles = new[] { "api-admin"  } },
+                new { Id = "u1", Username = "alice", Roles = new[] { "api-reader" } },
+                new { Id = "u2", Username = "bob",   Roles = new[] { "api-admin"  } },
             };
             return Results.Ok(users);
         })
@@ -24,8 +24,8 @@ public static class AdminEndpoints
         {
             var logs = new[]
             {
-                new { Timestamp = "2024-01-15T10:00:00Z", Action = "USER_CREATED",  Actor = "adminuser" },
-                new { Timestamp = "2024-01-15T11:23:00Z", Action = "ROLE_ASSIGNED", Actor = "adminuser" },
+                new { Timestamp = "2024-01-15T10:00:00Z", Action = "USER_CREATED",  Actor = "bob" },
+                new { Timestamp = "2024-01-15T11:23:00Z", Action = "ROLE_ASSIGNED", Actor = "bob" },
             };
             return Results.Ok(logs);
         })

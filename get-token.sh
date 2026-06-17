@@ -7,8 +7,8 @@
 #   - jq installed: brew install jq
 #
 # Users seeded by demo-realm.json:
-#   testuser  / testpass  → api-reader role
-#   adminuser / adminpass → api-admin role
+#   alice  / alice  → api-reader role
+#   bob   / bob   → api-admin role
 #
 # Usage: chmod +x get-token.sh && ./get-token.sh
 
@@ -40,10 +40,10 @@ decode_token() {
 
 # ── 1. Reader token ────────────────────────────────────────────────────────────
 echo "$SEP"
-echo "1. Fetch reader token (testuser → api-reader role)"
+echo "1. Fetch reader token (alice → api-reader role)"
 echo "$SEP"
 
-READER_RESP=$(get_token "testuser" "testpass")
+READER_RESP=$(get_token "alice" "alice")
 if echo "$READER_RESP" | jq -e '.error' > /dev/null 2>&1; then
   echo "Keycloak error:"; echo "$READER_RESP" | jq .; exit 1
 fi
@@ -57,10 +57,10 @@ READER_TOKEN=$(echo "$READER_RESP" | jq -r '.access_token')
 # ── 2. Admin token ─────────────────────────────────────────────────────────────
 echo ""
 echo "$SEP"
-echo "2. Fetch admin token (adminuser → api-admin role)"
+echo "2. Fetch admin token (bob → api-admin role)"
 echo "$SEP"
 
-ADMIN_RESP=$(get_token "adminuser" "adminpass")
+ADMIN_RESP=$(get_token "bob" "bob")
 if echo "$ADMIN_RESP" | jq -e '.error' > /dev/null 2>&1; then
   echo "Keycloak error:"; echo "$ADMIN_RESP" | jq .; exit 1
 fi
@@ -77,7 +77,7 @@ echo "$SEP"
 echo "3. Fetch admin token WITH audit.read scope"
 echo "$SEP"
 
-AUDIT_RESP=$(get_token "adminuser" "adminpass" "openid profile email audit.read")
+AUDIT_RESP=$(get_token "bob" "bob" "openid profile email audit.read")
 if echo "$AUDIT_RESP" | jq -e '.error' > /dev/null 2>&1; then
   echo "Keycloak error:"; echo "$AUDIT_RESP" | jq .; exit 1
 fi
