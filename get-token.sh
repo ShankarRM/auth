@@ -6,17 +6,19 @@
 #   - dotnet watch run      (API running on port 5050)
 #   - jq installed: brew install jq
 #
-# Users seeded by demo-realm.json:
-#   testuser  / testpass  → api-reader role
-#   adminuser / adminpass → api-admin role
+# Users seeded by keycloak-setup.sh:
+#   alice / Test1234!  → api-reader role
+#   bob   / Admin1234! → api-admin role
 #
-# Usage: chmod +x get-token.sh && ./get-token.sh
+# Usage (docker-compose path — public client):  ./get-token.sh
+# Usage (keycloak-setup.sh path — confidential): KC_API_SECRET=<secret> ./get-token.sh
 
 set -euo pipefail
 
 KC_URL="http://localhost:9093"
 REALM="demo"
-CLIENT_ID="demo-api"
+CLIENT_ID="dotnet-api"
+CLIENT_SECRET="${KC_API_SECRET:-}"   # empty = public client (docker-compose path); set = confidential (keycloak-setup.sh path)
 API_URL="http://localhost:5050"
 
 SEP="────────────────────────────────────────────────────────────"
@@ -26,6 +28,7 @@ SEP="─────────────────────────
 get_token() {
   local user="$1" pass="$2" scope="${3:-}"
   local data="grant_type=password&client_id=${CLIENT_ID}&username=${user}&password=${pass}"
+  [ -n "$CLIENT_SECRET" ] && data="${data}&client_secret=${CLIENT_SECRET}"
   [ -n "$scope" ] && data="${data}&scope=${scope}"
 
   curl -s -X POST \
@@ -40,10 +43,10 @@ decode_token() {
 
 # ── 1. Reader token ────────────────────────────────────────────────────────────
 echo "$SEP"
-echo "1. Fetch reader token (testuser → api-reader role)"
+echo "1. Fetch reader token (alice → api-reader role)"
 echo "$SEP"
 
-READER_RESP=$(get_token "testuser" "testpass")
+READER_RESP=$(get_token "alice" "Test1234!")
 if echo "$READER_RESP" | jq -e '.error' > /dev/null 2>&1; then
   echo "Keycloak error:"; echo "$READER_RESP" | jq .; exit 1
 fi
@@ -57,10 +60,10 @@ READER_TOKEN=$(echo "$READER_RESP" | jq -r '.access_token')
 # ── 2. Admin token ─────────────────────────────────────────────────────────────
 echo ""
 echo "$SEP"
-echo "2. Fetch admin token (adminuser → api-admin role)"
+echo "2. Fetch admin token (bob → api-admin role)"
 echo "$SEP"
 
-ADMIN_RESP=$(get_token "adminuser" "adminpass")
+ADMIN_RESP=$(get_token "bob" "Admin1234!")
 if echo "$ADMIN_RESP" | jq -e '.error' > /dev/null 2>&1; then
   echo "Keycloak error:"; echo "$ADMIN_RESP" | jq .; exit 1
 fi
@@ -77,7 +80,7 @@ echo "$SEP"
 echo "3. Fetch admin token WITH audit.read scope"
 echo "$SEP"
 
-AUDIT_RESP=$(get_token "adminuser" "adminpass" "openid profile email audit.read")
+AUDIT_RESP=$(get_token "bob" "Admin1234!" "openid profile email audit.read")
 if echo "$AUDIT_RESP" | jq -e '.error' > /dev/null 2>&1; then
   echo "Keycloak error:"; echo "$AUDIT_RESP" | jq .; exit 1
 fi

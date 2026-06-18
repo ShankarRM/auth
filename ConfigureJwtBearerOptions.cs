@@ -6,8 +6,14 @@ using Microsoft.IdentityModel.Tokens;
 namespace KeycloakDemo;
 
 internal sealed class ConfigureJwtBearerOptions(IOptions<KeycloakOptions> kc)
-    : IConfigureOptions<JwtBearerOptions>
+    : IConfigureNamedOptions<JwtBearerOptions>
 {
+    public void Configure(string? name, JwtBearerOptions options)
+    {
+        if (name != JwtBearerDefaults.AuthenticationScheme) return;
+        Configure(options);
+    }
+
     public void Configure(JwtBearerOptions options)
     {
         var o = kc.Value;

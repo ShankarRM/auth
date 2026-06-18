@@ -7,15 +7,15 @@ namespace KeycloakDemo.Infrastructure.Persistence;
 internal sealed class InMemoryOrderRepository : IOrderRepository
 {
     // Two users seeded to demonstrate Reader (own orders only) vs Admin (all orders).
-    // testuser  = sub from Keycloak; replace with real sub if testing end-to-end.
-    // adminuser = second user for cross-user visibility test.
+    // alice = sub from Keycloak; replace with real sub if testing end-to-end.
+    // bob   = second user for cross-user visibility test.
     private static readonly IReadOnlyList<Order> _orders =
     [
-        new() { Id = 1, Description = "Widget A — bulk",    CreatedBy = "testuser"  },
-        new() { Id = 2, Description = "Widget B — express", CreatedBy = "testuser"  },
-        new() { Id = 3, Description = "Widget C — sample",  CreatedBy = "testuser"  },
-        new() { Id = 4, Description = "Gadget X — trial",   CreatedBy = "adminuser" },
-        new() { Id = 5, Description = "Gadget Y — promo",   CreatedBy = "adminuser" },
+        new() { Id = 1, Description = "Widget A — bulk",    CreatedBy = "alice" },
+        new() { Id = 2, Description = "Widget B — express", CreatedBy = "alice" },
+        new() { Id = 3, Description = "Widget C — sample",  CreatedBy = "alice" },
+        new() { Id = 4, Description = "Gadget X — trial",   CreatedBy = "bob"   },
+        new() { Id = 5, Description = "Gadget Y — promo",   CreatedBy = "bob"   },
     ];
 
     public Task<IReadOnlyList<Order>> GetAllAsync(CancellationToken ct = default) =>

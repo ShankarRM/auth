@@ -32,6 +32,7 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapHealthEndpoints();
+app.MapIdentityEndpoints();
 app.MapOrderEndpoints();
 app.MapAdminEndpoints();
 

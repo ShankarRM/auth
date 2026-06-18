@@ -8,7 +8,7 @@ namespace KeycloakDemo.Tests;
 
 public class KeycloakRoleClaimsTransformationTests
 {
-    private const string ClientId = "demo-api";
+    private const string ClientId = "dotnet-api";
 
     private readonly KeycloakRoleClaimsTransformation _sut;
 

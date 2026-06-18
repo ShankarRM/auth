@@ -4,11 +4,12 @@
 # Tested against Keycloak 26.x
 #
 # Usage:
-#   KC_ADMIN_PASSWORD=admin KC_WORKER_SECRET=s3cr3t ./keycloak-setup.sh
+#   KC_ADMIN_PASSWORD=admin KC_WORKER_SECRET=s3cr3t KC_API_SECRET=apisecret ./keycloak-setup.sh
 #
 # Required env vars:
 #   KC_ADMIN_PASSWORD  — Keycloak admin password (default: admin)
 #   KC_WORKER_SECRET   — client secret for background-worker (no default)
+#   KC_API_SECRET      — client secret for dotnet-api (no default)
 #
 # Optional env vars:
 #   KEYCLOAK_URL       — base URL of Keycloak (default: http://localhost:9093)
@@ -21,6 +22,7 @@ REALM="demo"
 ADMIN_USER="${KC_ADMIN:-admin}"
 ADMIN_PASS="${KC_ADMIN_PASSWORD:-admin}"
 WORKER_SECRET="${KC_WORKER_SECRET:?KC_WORKER_SECRET env var is required}"
+API_SECRET="${KC_API_SECRET:?KC_API_SECRET env var is required}"
 
 # jq is required for JSON parsing
 command -v jq >/dev/null 2>&1 || { echo "jq is required but not installed. Aborting." >&2; exit 1; }
@@ -62,18 +64,19 @@ echo "✓ Realm '$REALM' created"
 # Confidential client for the .NET API server. Enables Authorization Code flow
 # so human users can authenticate through a browser login page.
 # directAccessGrantsEnabled: true — allows Resource Owner Password (dev/test only).
-kc_post "$BASE/$REALM/clients" -d '{
-  "clientId":                   "dotnet-api",
-  "name":                       ".NET Demo API",
-  "enabled":                    true,
-  "protocol":                   "openid-connect",
-  "publicClient":               false,
-  "standardFlowEnabled":        true,
-  "directAccessGrantsEnabled":  true,
-  "serviceAccountsEnabled":     false,
-  "redirectUris":               ["http://localhost:5000/*"],
-  "webOrigins":                 ["+"]
-}'
+kc_post "$BASE/$REALM/clients" -d "{
+  \"clientId\":                   \"dotnet-api\",
+  \"name\":                       \".NET Demo API\",
+  \"enabled\":                    true,
+  \"protocol\":                   \"openid-connect\",
+  \"publicClient\":               false,
+  \"standardFlowEnabled\":        true,
+  \"directAccessGrantsEnabled\":  true,
+  \"serviceAccountsEnabled\":     false,
+  \"secret\":                     \"$API_SECRET\",
+  \"redirectUris\":               [\"http://localhost:5000/*\"],
+  \"webOrigins\":                 [\"+\"]
+}" || echo "  (dotnet-api may already exist, continuing)"
 echo "✓ Client 'dotnet-api' created (confidential, Authorization Code)"
 
 # ── 4. Create web-frontend client ──────────────────────────────────────────────
@@ -99,7 +102,7 @@ kc_post "$BASE/$REALM/clients" -d '{
   },
   "redirectUris":               ["http://localhost:5173/*"],
   "webOrigins":                 ["http://localhost:5173"]
-}'
+}' || echo "  (web-frontend may already exist, continuing)"
 echo "✓ Client 'web-frontend' created (public, PKCE)"
 
 # ── 5. Create background-worker client ────────────────────────────────────────
@@ -119,7 +122,7 @@ kc_post "$BASE/$REALM/clients" -d "{
   \"directAccessGrantsEnabled\":  false,
   \"serviceAccountsEnabled\":     true,
   \"secret\":                     \"$WORKER_SECRET\"
-}"
+}" || echo "  (background-worker may already exist, continuing)"
 echo "✓ Client 'background-worker' created (confidential, Client Credentials)"
 
 # ── 6. Create realm roles ──────────────────────────────────────────────────────
@@ -188,8 +191,8 @@ create_user() {
   echo "✓ User '$USERNAME' created with role '$ROLE'"
 }
 
-create_user "testuser"  "Test1234!"  "api-reader"
-create_user "adminuser" "Admin1234!" "api-admin"
+create_user "alice" "Test1234!"  "api-reader"
+create_user "bob"   "Admin1234!" "api-admin"
 
 echo ""
 echo "==> Setup complete."
@@ -201,5 +204,5 @@ echo "    | jq -r '.access_token'"
 echo ""
 echo "Resource Owner Password test (dev only):"
 echo "  curl -s -X POST $KEYCLOAK_URL/realms/$REALM/protocol/openid-connect/token \\"
-echo "    -d 'grant_type=password&client_id=dotnet-api&username=testuser&password=Test1234!' \\"
+echo "    -d 'grant_type=password&client_id=dotnet-api&client_secret=\$KC_API_SECRET&username=alice&password=Test1234!' \\"
 echo "    | jq -r '.access_token'"

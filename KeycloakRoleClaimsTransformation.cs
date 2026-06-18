@@ -85,7 +85,7 @@ public sealed class KeycloakRoleClaimsTransformation : IClaimsTransformation
     private void AddClientRoles(ClaimsIdentity identity, ClaimsPrincipal source)
     {
         // resource_access JSON shape:
-        // { "demo-api": { "roles": ["api-reader"] }, "account": { "roles": [...] } }
+        // { "dotnet-api": { "roles": ["api-reader"] }, "account": { "roles": [...] } }
         var resourceAccessClaim = source.FindFirst("resource_access");
         if (resourceAccessClaim is null) return;
 

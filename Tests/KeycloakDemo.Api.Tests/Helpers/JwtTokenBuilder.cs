@@ -58,7 +58,7 @@ public sealed class JwtTokenBuilder
             new("azp",                _azp),
             new("preferred_username", _azp == "background-worker"
                 ? $"service-account-{_azp}"
-                : "testuser"),
+                : "alice"),
         };
 
         // ClaimTypes.Role is what KeycloakRoleClaimsTransformation writes and

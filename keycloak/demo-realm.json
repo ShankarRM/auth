@@ -204,7 +204,7 @@
 
   "clients": [
     {
-      "clientId": "demo-api",
+      "clientId": "dotnet-api",
       "enabled": true,
       "protocol": "openid-connect",
 
@@ -227,7 +227,7 @@
           "protocolMapper": "oidc-audience-mapper",
           "consentRequired": false,
           "config": {
-            "included.client.audience": "demo-api",
+            "included.client.audience": "dotnet-api",
             "id.token.claim": "false",
             "access.token.claim": "true"
           }
@@ -238,26 +238,26 @@
 
   "users": [
     {
-      "username": "testuser",
+      "username": "alice",
       "enabled": true,
-      "email": "testuser@example.com",
-      "firstName": "Test",
-      "lastName": "User",
+      "email": "alice@example.com",
+      "firstName": "Alice",
+      "lastName": "Reader",
       "emailVerified": true,
       "credentials": [
-        { "type": "password", "value": "testpass", "temporary": false }
+        { "type": "password", "value": "Test1234!", "temporary": false }
       ],
       "realmRoles": ["api-reader"]
     },
     {
-      "username": "adminuser",
+      "username": "bob",
       "enabled": true,
-      "email": "adminuser@example.com",
-      "firstName": "Admin",
-      "lastName": "User",
+      "email": "bob@example.com",
+      "firstName": "Bob",
+      "lastName": "Admin",
       "emailVerified": true,
       "credentials": [
-        { "type": "password", "value": "adminpass", "temporary": false }
+        { "type": "password", "value": "Admin1234!", "temporary": false }
       ],
       "realmRoles": ["api-admin"]
     }

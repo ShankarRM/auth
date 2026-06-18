@@ -17,7 +17,10 @@ internal sealed class CurrentUserService(IHttpContextAccessor httpContextAccesso
     private readonly ClaimsPrincipal _user =
         httpContextAccessor.HttpContext?.User ?? new ClaimsPrincipal();
 
-    public string UserId   => _user.FindFirst("sub")?.Value               ?? string.Empty;
+    // Uses preferred_username as UserId so it aligns with InMemoryOrderRepository's
+    // CreatedBy field, which stores usernames ("alice", "bob"). In a production system
+    // with a real database, UserId would be the stable sub UUID instead.
+    public string UserId   => _user.FindFirst("preferred_username")?.Value ?? string.Empty;
     public string Username => _user.FindFirst("preferred_username")?.Value ?? string.Empty;
     public string Email    => _user.FindFirst("email")?.Value              ?? string.Empty;
 

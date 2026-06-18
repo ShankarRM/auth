@@ -6,8 +6,6 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Options;
-
 namespace KeycloakDemo.Infrastructure;
 
 public static class DependencyInjection
@@ -27,13 +25,17 @@ public static class DependencyInjection
             .ValidateOnStart();
 
         // ── Authentication ─────────────────────────────────────────────────────
+        var kc = configuration.GetSection("Keycloak").Get<KeycloakOptions>()!;
+
         services
             .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
-            .AddJwtBearer();
-
-        // Wires KeycloakOptions → JwtBearerOptions after startup validation passes.
-        // Uses TokenValidationConfig.Build() which supports multi-client audiences.
-        services.AddSingleton<IConfigureOptions<JwtBearerOptions>, ConfigureJwtBearerOptions>();
+            .AddJwtBearer(options =>
+            {
+                options.Authority            = kc.Authority;
+                options.RequireHttpsMetadata = kc.RequireHttpsMetadata;
+                options.MapInboundClaims     = false;
+                options.TokenValidationParameters = TokenValidationConfig.Build(kc);
+            });
 
         // ── Authorization ──────────────────────────────────────────────────────
         services.AddAuthorization(AuthorizationPolicies.AddPolicies);
