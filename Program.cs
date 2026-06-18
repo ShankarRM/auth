@@ -1,7 +1,8 @@
+using System.Security.Claims;
 using KeycloakDemo;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
-using Microsoft.Extensions.Options;
+using Microsoft.IdentityModel.Tokens;
 using Scalar.AspNetCore;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -19,17 +20,26 @@ builder.Services.AddOptions<KeycloakOptions>()
 
 // ── Authentication ─────────────────────────────────────────────────────────────
 
-// Register JWT Bearer as the default authentication scheme.
-// No inline config here — ConfigureJwtBearerOptions (below) wires the options
-// after KeycloakOptions has been validated.
-builder.Services
-    .AddAuthentication(JwtBearerDefaults.AuthenticationScheme) // sets default scheme to "Bearer"
-    .AddJwtBearer();                                           // registers JwtBearerHandler
+var kc = builder.Configuration.GetSection("Keycloak");
 
-// IConfigureOptions<JwtBearerOptions> is resolved lazily by DI when the auth
-// middleware first needs JwtBearerOptions. By that point ValidateOnStart has
-// already run, so kc.Value is guaranteed non-null.
-builder.Services.AddSingleton<IConfigureOptions<JwtBearerOptions>, ConfigureJwtBearerOptions>();
+builder.Services
+    .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(options =>
+    {
+        options.Authority            = kc["Authority"];
+        options.Audience             = kc["Audience"];
+        options.RequireHttpsMetadata = kc.GetValue<bool>("RequireHttpsMetadata", true);
+        options.MapInboundClaims     = false;
+
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuer   = true,
+            ValidateAudience = true,
+            ValidateLifetime = true,
+            NameClaimType    = "preferred_username",
+            RoleClaimType    = ClaimTypes.Role,
+        };
+    });
 
 // ── OpenAPI ────────────────────────────────────────────────────────────────────
 
